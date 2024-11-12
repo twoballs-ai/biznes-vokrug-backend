@@ -3,11 +3,11 @@ version: '3.8'
 services:
   postgres:
     image: postgres:latest
-    container_name: my_postgres
+    container_name: biznes-vokrug
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydatabase
+      POSTGRES_DB: biznes-vokrug
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
     ports:
       - "5432:5432"
     volumes:

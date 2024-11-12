@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, FileResponse
 
-from madsoft.routers import router
+from .routers import router
 
 app = FastAPI()
 

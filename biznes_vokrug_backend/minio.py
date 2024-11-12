@@ -9,7 +9,7 @@ load_dotenv()
 MINIO_URL = os.getenv("MINIO_URL", "127.0.0.1:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-BUCKET_NAME = "madsoft"
+BUCKET_NAME = "organizations"
 
 minio_client = Minio(
     endpoint=MINIO_URL,

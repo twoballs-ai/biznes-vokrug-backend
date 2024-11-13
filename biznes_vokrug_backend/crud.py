@@ -1,37 +1,26 @@
-# from sqlalchemy.orm import Session
-# from .models import Meme
-# from .schemas import MemeCreate, MemeUpdate
+# app/crud/user_crud.py
 
-# def get_memes(db: Session, skip: int = 0, limit: int = 10):
-#     return db.query(Meme).offset(skip).limit(limit).all()
+from sqlalchemy.orm import Session
+from passlib.context import CryptContext
+from .models import Owner
+from .schemas import UserCreate
 
-# def create_meme(db: Session, meme: MemeCreate) -> Meme:
-#     try:
-#         db_meme = Meme(**meme.model_dump())
-#         db.add(db_meme)
-#         db.commit()
-#         db.refresh(db_meme)
-#         return db_meme
-#     except Exception as e:
-#         db.rollback()
-#         raise e
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# def get_meme(db: Session, meme_id: int):
-#     return db.query(Meme).filter(Meme.id == meme_id).first()
+def get_user_by_email(db: Session, email: str):
+    return db.query(Owner).filter(Owner.email == email).first()
 
-# def update_meme(db: Session, meme_id: int, meme: MemeUpdate):
-#     db_meme = db.query(Meme).filter(Meme.id == meme_id).first()
-#     if db_meme:
-#         update_data = meme.model_dump(exclude_unset=True)
-#         for key, value in update_data.items():
-#             setattr(db_meme, key, value)
-#         db.commit()
-#         db.refresh(db_meme)
-#     return db_meme
+def get_user(db: Session, user_id: int):
+    return db.query(Owner).filter(Owner.id == user_id).first()
 
-# def delete_meme(db: Session, meme_id: int):
-#     db_meme = db.query(Meme).filter(Meme.id == meme_id).first()
-#     if db_meme:
-#         db.delete(db_meme)
-#         db.commit()
-#     return db_meme
+def create_user(db: Session, user: UserCreate):
+    hashed_password = pwd_context.hash(user.password)
+    db_user = Owner(
+        name=user.name,
+        email=user.email,
+        hashed_password=hashed_password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user

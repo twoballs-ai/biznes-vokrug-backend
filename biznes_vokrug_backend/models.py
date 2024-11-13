@@ -1,7 +1,7 @@
 from typing import List, Optional
-from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Float
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
+from sqlalchemy.sql import func
 from .database import Base
 
 class Owner(Base):
@@ -20,6 +20,7 @@ class Owner(Base):
         back_populates="owner", uselist=False, cascade="all, delete-orphan"
     )
 
+
 class Organization(Base):
     __tablename__ = "organizations_models"
 
@@ -30,6 +31,16 @@ class Organization(Base):
     inn: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     ogrn: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
     owner_id: Mapped[int] = mapped_column(ForeignKey("owners_models.id"))
 
     owner: Mapped["Owner"] = relationship(back_populates="organizations")

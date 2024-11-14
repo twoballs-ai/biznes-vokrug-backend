@@ -7,11 +7,11 @@ from fastapi.responses import RedirectResponse, FileResponse
 from biznes_vokrug_backend.auth import get_current_user
 
 from .routers import router
-
+from .auth import oauth2_scheme
 app = FastAPI(
     title="Your API",
     description="API documentation with authorization required",
-    dependencies=[Depends(get_current_user)]
+
 )
 
 @app.get("/")
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api", tags=["User management"])
+# app.include_router(router, prefix="/api", tags=["User management"], dependencies=[Depends(oauth2_scheme)])
 
 if __name__ == "__main__":
     uvicorn.run("biznes_vokrug_backend.main:app", host="0.0.0.0", port=8000, reload=True)

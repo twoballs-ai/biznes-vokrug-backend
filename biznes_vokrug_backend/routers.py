@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, R
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from biznes_vokrug_backend.auth import create_access_token, create_refresh_token, verify_password, verify_token
+from biznes_vokrug_backend.auth import create_access_token, create_refresh_token, get_current_user, verify_password, verify_token
 from biznes_vokrug_backend.crud import get_user_by_email
 from biznes_vokrug_backend.utils.redis_dadata import get_address_suggestions
 from fastapi import FastAPI, HTTPException, Depends, status, Response
@@ -19,8 +19,8 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from .database import get_db
-from .models import Owner, Organization
-from .schemas import UserCreate, OrganizationCreate, OrganizationUpdate, OrganizationResponse
+from .models import IndividualEntrepreneur, User, Organization
+from .schemas import IndividualEntrepreneurCreate, UserCreate, OrganizationCreate, OrganizationUpdate, OrganizationResponse
 from passlib.context import CryptContext
 import os
 from dotenv import load_dotenv
@@ -101,15 +101,65 @@ def refresh_token_endpoint(
 
     return {"message": "Token refreshed"}
 
-# Регистрация пользователя
-@router.post("/register", response_model=dict)
-async def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    hashed_password = pwd_context.hash(user.password)
-    db_user = Owner(name=user.name, email=user.email, hashed_password=hashed_password)
-    db.add(db_user)
+@router.post("/register/")
+async def register_user(
+    user: UserCreate,
+    add_organization: bool = False,
+    add_individual_entrepreneur: bool = False,
+    org_data: Optional[OrganizationCreate] = None,
+    ie_data: Optional[IndividualEntrepreneurCreate] = None,
+    db: Session = Depends(get_db)
+):
+    # Создание пользователя
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        phone=user.phone,
+        hashed_password=user.hashed_password
+    )
+    db.add(new_user)
     db.commit()
-    db.refresh(db_user)
-    return {"msg": "User registered successfully"}
+    db.refresh(new_user)
+    
+    # Если пользователь выбрал организацию
+    if add_organization:
+        if not org_data:
+            raise HTTPException(status_code=400, detail="Organization data is required.")
+        new_organization = Organization(
+            name=org_data.name,
+            description=org_data.description,
+            address=org_data.address,
+            inn=org_data.inn,
+            ogrn=org_data.ogrn,
+            phone=org_data.phone,
+            website=org_data.website,
+            email=org_data.email,
+            category=org_data.category,
+            is_verified=org_data.is_verified,
+            rating=org_data.rating,
+            logo_url=org_data.logo_url,
+            city=org_data.city,
+            owner_id=new_user.id
+        )
+        db.add(new_organization)
+        db.commit()
+        db.refresh(new_organization)
+
+    # Если пользователь выбрал ИП
+    if add_individual_entrepreneur:
+        if not ie_data:
+            raise HTTPException(status_code=400, detail="Individual Entrepreneur data is required.")
+        new_entrepreneur = IndividualEntrepreneur(
+            inn=ie_data.inn,
+            ogrnip=ie_data.ogrnip,
+            phone=ie_data.phone,
+            owner_id=new_user.id
+        )
+        db.add(new_entrepreneur)
+        db.commit()
+        db.refresh(new_entrepreneur)
+    
+    return {"message": "User and associated entities created successfully."}
 
 @router.post("/organizations", response_model=OrganizationResponse)
 def create_organization(org_data: OrganizationCreate, db: Session = Depends(get_db)):
@@ -150,7 +200,7 @@ def delete_organization(id: int, db: Session = Depends(get_db)):
     return org
 
 @router.get("/suggest/address")
-async def suggest_address(query: str):
+async def suggest_address(query: str, current_user: User = Depends(get_current_user),):
     if not query:
         raise HTTPException(status_code=400, detail="Query parameter is required")
 

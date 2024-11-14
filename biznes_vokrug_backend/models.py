@@ -4,10 +4,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from .database import Base
 
-class Owner(Base):
-    __tablename__ = "owners_models"
+# User model remains the same
+class User(Base):
+    __tablename__ = "user_models"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -20,11 +21,11 @@ class Owner(Base):
         back_populates="owner", uselist=False, cascade="all, delete-orphan"
     )
 
-
+# Organization model remains the same
 class Organization(Base):
     __tablename__ = "organizations_models"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -41,17 +42,67 @@ class Organization(Base):
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
-    owner_id: Mapped[int] = mapped_column(ForeignKey("owners_models.id"))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user_models.id"))
 
-    owner: Mapped["Owner"] = relationship(back_populates="organizations")
+    owner: Mapped["User"] = relationship(back_populates="organizations")
 
+    services: Mapped[List["Service"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
+    products: Mapped[List["Product"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
+
+# Extending IndividualEntrepreneur model to match Organization model
 class IndividualEntrepreneur(Base):
     __tablename__ = "individual_entrepreneurs_models"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     inn: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     ogrnip: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("owners_models.id"))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user_models.id"))
 
-    owner: Mapped["Owner"] = relationship(back_populates="individual_entrepreneur")
+    owner: Mapped["User"] = relationship(back_populates="individual_entrepreneur")
+
+    services: Mapped[List["Service"]] = relationship(
+        back_populates="individual_entrepreneur", cascade="all, delete-orphan"
+    )
+    products: Mapped[List["Product"]] = relationship(
+        back_populates="individual_entrepreneur", cascade="all, delete-orphan"
+    )
+
+# Service model for Organization and IndividualEntrepreneur
+class Service(Base):
+    __tablename__ = "services_models"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    price: Mapped[Optional[Float]] = mapped_column(Float, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
+    organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations_models.id"))
+    individual_entrepreneur_id: Mapped[Optional[int]] = mapped_column(ForeignKey("individual_entrepreneurs_models.id"))
+
+    organization: Mapped[Optional["Organization"]] = relationship(back_populates="services")
+    individual_entrepreneur: Mapped[Optional["IndividualEntrepreneur"]] = relationship(back_populates="services")
+
+# Product model for Organization and IndividualEntrepreneur
+class Product(Base):
+    __tablename__ = "products_models"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    price: Mapped[Optional[Float]] = mapped_column(Float, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
+    organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations_models.id"))
+    individual_entrepreneur_id: Mapped[Optional[int]] = mapped_column(ForeignKey("individual_entrepreneurs_models.id"))
+
+    organization: Mapped[Optional["Organization"]] = relationship(back_populates="products")
+    individual_entrepreneur: Mapped[Optional["IndividualEntrepreneur"]] = relationship(back_populates="products")
+

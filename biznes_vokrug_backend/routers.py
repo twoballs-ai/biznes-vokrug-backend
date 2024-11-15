@@ -124,7 +124,7 @@ async def register_user(
     # Если пользователь выбрал организацию
     if add_organization:
         if not org_data:
-            raise HTTPException(status_code=400, detail="Organization data is required.")
+            raise HTTPException(status_code=400, detail="Необходимо указать данные организации.")
         new_organization = Organization(
             name=org_data.name,
             description=org_data.description,
@@ -148,7 +148,7 @@ async def register_user(
     # Если пользователь выбрал ИП
     if add_individual_entrepreneur:
         if not ie_data:
-            raise HTTPException(status_code=400, detail="Individual Entrepreneur data is required.")
+            raise HTTPException(status_code=400, detail="Необходимо указать данные ИП.")
         new_entrepreneur = IndividualEntrepreneur(
             inn=ie_data.inn,
             ogrnip=ie_data.ogrnip,
@@ -159,7 +159,7 @@ async def register_user(
         db.commit()
         db.refresh(new_entrepreneur)
     
-    return {"message": "User and associated entities created successfully."}
+    return {"message": "Пользователь и связанные сущности успешно созданы."}
 
 @router.post("/organizations", response_model=OrganizationResponse)
 def create_organization(org_data: OrganizationCreate, db: Session = Depends(get_db)):

@@ -25,22 +25,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # Проверка токена и получение текущего пользователя
+
+# Функция для получения текущего пользователя
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    if not token:
+        raise HTTPException(status_code=401, detail="Токен отсутствует")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = verify_token(token)
         user_id: str = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
+            raise HTTPException(status_code=401, detail="Неверный токен")
         user = get_user(db, int(user_id))
         if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Неверный токен")
 
 # Utility Functions
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):

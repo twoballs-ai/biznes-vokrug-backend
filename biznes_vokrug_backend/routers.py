@@ -1,30 +1,34 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Response, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from biznes_vokrug_backend.auth import create_access_token, create_refresh_token, get_current_user, verify_password, verify_token
+from biznes_vokrug_backend.auth import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    verify_password,
+    verify_token
+)
 from biznes_vokrug_backend.crud import get_user_by_email
 from biznes_vokrug_backend.utils.redis_dadata import get_address_suggestions
 from fastapi import FastAPI, HTTPException, Depends, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
 import os
-from fastapi import Header, Cookie
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from .database import get_db
 from .models import IndividualEntrepreneur, User, Organization
-from .schemas import IndividualEntrepreneurCreate, UserCreate, OrganizationCreate, OrganizationUpdate, OrganizationResponse
+from .schemas import (
+    IndividualEntrepreneurCreate,
+    UserCreate,
+    OrganizationCreate,
+    OrganizationUpdate,
+    OrganizationResponse
+)
 from passlib.context import CryptContext
-import os
-from dotenv import load_dotenv
-
 
 load_dotenv()
 
@@ -35,71 +39,54 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", 7))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter()
-
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 @router.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
-    response: Response = None
+    db: Session = Depends(get_db)
 ):
     user = get_user_by_email(db, form_data.username)
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=400, detail="Неверные учетные данные")
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="Lax",
-        secure=True
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        samesite="Lax",
-        secure=True
-    )
-
-    return {"message": "Login successful"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
 
 @router.post("/logout")
-def logout(response: Response):
-    response.delete_cookie(key="access_token")
-    response.delete_cookie(key="refresh_token")
-    return {"message": "Logged out"}
+def logout():
+    # Если вы не храните токены на сервере, просто возвращайте сообщение
+    return {"message": "Вы вышли из системы"}
 
 @router.post("/refresh")
 def refresh_token_endpoint(
-    refresh_token: str = Cookie(None),
-    response: Response = None
+    refresh_token: str = Body(...),
+    db: Session = Depends(get_db)
 ):
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh token is missing")
+        raise HTTPException(status_code=401, detail="Токен обновления отсутствует")
 
-    payload = verify_token(refresh_token)
-    user_id: str = payload.get("sub")
-
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    new_access_token = create_access_token({"sub": user_id})
-    response.set_cookie(
-        key="access_token",
-        value=new_access_token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="Lax",
-        secure=True
-    )
-
-    return {"message": "Token refreshed"}
+    try:
+        payload = verify_token(refresh_token)
+        user_id: str = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Неверный токен")
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        new_access_token = create_access_token({"sub": user_id})
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Неверный токен")
 
 @router.post("/register/")
 async def register_user(
@@ -110,12 +97,15 @@ async def register_user(
     ie_data: Optional[IndividualEntrepreneurCreate] = None,
     db: Session = Depends(get_db)
 ):
+    # Хэшируем пароль пользователя
+    hashed_password = pwd_context.hash(user.password)
+    
     # Создание пользователя
     new_user = User(
         name=user.name,
         email=user.email,
         phone=user.phone,
-        hashed_password=user.hashed_password
+        hashed_password=hashed_password
     )
     db.add(new_user)
     db.commit()
@@ -161,26 +151,43 @@ async def register_user(
     
     return {"message": "Пользователь и связанные сущности успешно созданы."}
 
+# Следующие эндпоинты теперь используют get_current_user для проверки аутентификации
 @router.post("/organizations", response_model=OrganizationResponse)
-def create_organization(org_data: OrganizationCreate, db: Session = Depends(get_db)):
-    new_org = Organization(**org_data.dict())
+def create_organization(
+    org_data: OrganizationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    new_org = Organization(**org_data.dict(), owner_id=current_user.id)
     db.add(new_org)
     db.commit()
     db.refresh(new_org)
     return new_org
 
 @router.get("/organizations/{id}", response_model=OrganizationResponse)
-def get_organization(id: int, db: Session = Depends(get_db)):
+def get_organization(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     org = db.query(Organization).filter(Organization.id == id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Организация не найдена")
     return org
 
 @router.put("/organizations/{id}", response_model=OrganizationResponse)
-def update_organization(id: int, org_data: OrganizationUpdate, db: Session = Depends(get_db)):
+def update_organization(
+    id: int,
+    org_data: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     org = db.query(Organization).filter(Organization.id == id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Организация не найдена")
+    # Проверяем, является ли текущий пользователь владельцем
+    if org.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Вы не авторизованы для обновления этой организации")
 
     for key, value in org_data.dict(exclude_unset=True).items():
         setattr(org, key, value)
@@ -190,22 +197,33 @@ def update_organization(id: int, org_data: OrganizationUpdate, db: Session = Dep
     return org
 
 @router.delete("/organizations/{id}", response_model=OrganizationResponse)
-def delete_organization(id: int, db: Session = Depends(get_db)):
+def delete_organization(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     org = db.query(Organization).filter(Organization.id == id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Организация не найдена")
+    # Проверяем, является ли текущий пользователь владельцем
+    if org.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Вы не авторизованы для удаления этой организации")
     
     db.delete(org)
     db.commit()
     return org
 
 @router.get("/suggest/address")
-async def suggest_address(query: str, current_user: User = Depends(get_current_user),):
+async def suggest_address(
+    query: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     if not query:
-        raise HTTPException(status_code=400, detail="Query parameter is required")
+        raise HTTPException(status_code=400, detail="Требуется параметр запроса")
 
     suggestions = get_address_suggestions(query)
     if not suggestions:
-        raise HTTPException(status_code=404, detail="No suggestions found")
+        raise HTTPException(status_code=404, detail="Предложения не найдены")
 
     return {"suggestions": suggestions}

@@ -5,7 +5,7 @@ class UserCreate(BaseModel):
     name: Optional[str] = None
     email: EmailStr
     phone: Optional[str] = None
-    hashed_password: str = Field(..., alias="password")
+    password: str
 
 
 class IndividualEntrepreneurCreate(BaseModel):

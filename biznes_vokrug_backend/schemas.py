@@ -2,10 +2,10 @@ from typing import Optional
 from pydantic import BaseModel, Field, EmailStr
 
 class UserCreate(BaseModel):
-    name: Optional[str] = None
-    email: EmailStr
-    phone: Optional[str] = None
-    password: str
+    name: Optional[str]  # Имя может быть необязательным
+    email: str  # Обязательное поле
+    phone: Optional[str]  # Необязательное
+    password: str  # Обязательное
 
 
 class IndividualEntrepreneurCreate(BaseModel):
@@ -22,7 +22,7 @@ class OrganizationCreate(BaseModel):
     ogrn: str = Field(..., min_length=13, max_length=13, description="ОГРН должен содержать 13 цифр")
     phone: Optional[str] = None
     website: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     category: Optional[str] = None
     is_verified: bool = False
     rating: Optional[float] = None

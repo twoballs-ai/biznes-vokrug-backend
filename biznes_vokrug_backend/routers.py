@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Response, Body
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from biznes_vokrug_backend.auth import (
@@ -90,13 +90,24 @@ def refresh_token_endpoint(
 
 @router.post("/register/")
 async def register_user(
-    user: UserCreate,
-    add_organization: bool = False,
-    add_individual_entrepreneur: bool = False,
+    user: UserCreate = Body(...),  # Данные пользователя
+    add_organization: bool = Body(False),  # Флаг добавления организации
+    add_individual_entrepreneur: bool = Body(False),  # Флаг добавления ИП
     org_data: Optional[OrganizationCreate] = None,
     ie_data: Optional[IndividualEntrepreneurCreate] = None,
     db: Session = Depends(get_db)
 ):
+    print("add_organization:", add_organization)
+    print("add_individual_entrepreneur:", add_individual_entrepreneur)
+
+    # Проверяем, существует ли пользователь с таким email
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        return JSONResponse(
+            content={"status": False, "message": "Пользователь уже существует"},
+            status_code=200,
+        )
+
     # Хэшируем пароль пользователя
     hashed_password = pwd_context.hash(user.password)
     
@@ -110,7 +121,7 @@ async def register_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+    print(add_organization)
     # Если пользователь выбрал организацию
     if add_organization:
         if not org_data:
@@ -129,7 +140,8 @@ async def register_user(
             rating=org_data.rating,
             logo_url=org_data.logo_url,
             city=org_data.city,
-            owner_id=new_user.id
+            owner_id=new_user.id,
+            updated_at=datetime.utcnow() 
         )
         db.add(new_organization)
         db.commit()
@@ -149,7 +161,10 @@ async def register_user(
         db.commit()
         db.refresh(new_entrepreneur)
     
-    return {"message": "Пользователь и связанные сущности успешно созданы."}
+    return JSONResponse(
+        content={"status": True,"message": "Пользователь успешно создан"},
+        status_code=200,
+    )
 
 # Следующие эндпоинты теперь используют get_current_user для проверки аутентификации
 @router.post("/organizations", response_model=OrganizationResponse)

@@ -20,6 +20,16 @@ class User(Base):
     individual_entrepreneur: Mapped[Optional["IndividualEntrepreneur"]] = relationship(
         back_populates="owner", uselist=False, cascade="all, delete-orphan"
     )
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "phone": self.phone,
+            # Include related models if needed
+            "organizations": self.organizations if self.organizations else None,
+            "individual_entrepreneur": self.individual_entrepreneur if self.individual_entrepreneur else None,
+        }
 
 # Organization model remains the same
 class Organization(Base):

@@ -31,7 +31,6 @@ class User(Base):
             "individual_entrepreneur": self.individual_entrepreneur if self.individual_entrepreneur else None,
         }
 
-# Organization model remains the same
 class Organization(Base):
     __tablename__ = "organizations_models"
 
@@ -50,7 +49,12 @@ class Organization(Base):
     logo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=True
+    )
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("user_models.id"))
 
@@ -63,7 +67,30 @@ class Organization(Base):
         back_populates="organization", cascade="all, delete-orphan"
     )
 
-# Extending IndividualEntrepreneur model to match Organization model
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "address": self.address,
+            "inn": self.inn,
+            "ogrn": self.ogrn,
+            "phone": self.phone,
+            "website": self.website,
+            "email": self.email,
+            "category": self.category,
+            "is_verified": self.is_verified,
+            "rating": self.rating,
+            "logo_url": self.logo_url,
+            "city": self.city,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "owner_id": self.owner_id,
+            "services": [service.to_dict() for service in self.services] if self.services else [],
+            "products": [product.to_dict() for product in self.products] if self.products else [],
+        }
+
+
 class IndividualEntrepreneur(Base):
     __tablename__ = "individual_entrepreneurs_models"
 
@@ -81,6 +108,17 @@ class IndividualEntrepreneur(Base):
     products: Mapped[List["Product"]] = relationship(
         back_populates="individual_entrepreneur", cascade="all, delete-orphan"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "inn": self.inn,
+            "ogrnip": self.ogrnip,
+            "phone": self.phone,
+            "owner_id": self.owner_id,
+            "services": [service.to_dict() for service in self.services] if self.services else [],
+            "products": [product.to_dict() for product in self.products] if self.products else [],
+        }
 
 # Service model for Organization and IndividualEntrepreneur
 class Service(Base):

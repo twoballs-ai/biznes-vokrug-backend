@@ -167,18 +167,45 @@ async def register_user(
         status_code=200,
     )
 
-# Следующие эндпоинты теперь используют get_current_user для проверки аутентификации
-@router.post("/organizations", response_model=OrganizationResponse)
+@router.post("/organizations", response_model=Organization)
 def create_organization(
     org_data: OrganizationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    new_org = Organization(**org_data.dict(), owner_id=current_user.id)
+    # Создаём новую организацию
+    new_org = Organization(**org_data.model_dump(), owner_id=current_user.id)
     db.add(new_org)
     db.commit()
     db.refresh(new_org)
-    return new_org
+    return JSONResponse(
+            content={"status": False, "data": new_org.to_dict(), "message": "Пользователь уже существует"},
+            status_code=200,
+        )
+
+
+# @router.put("/organizations/{org_id}", response_model=Organization)
+# def update_organization(
+#     org_id: int,
+#     org_data: OrganizationUpdate,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     # Получаем организацию из базы данных
+#     org = db.query(Organization).filter(Organization.id == org_id, Organization.owner_id == current_user.id).first()
+#     if not org:
+#         raise HTTPException(status_code=404, detail="Организация не найдена")
+
+#     # Обновляем данные организации
+#     for key, value in org_data.model_dump(exclude_unset=True).items():
+#         setattr(org, key, value)
+
+#     # Обновляем время обновления
+#     org.updated_at = datetime.utcnow()
+
+#     db.commit()
+#     db.refresh(org)
+#     return org
 
 @router.get("/organizations/{id}", response_model=OrganizationResponse)
 def get_organization(

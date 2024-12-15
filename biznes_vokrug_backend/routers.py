@@ -167,7 +167,7 @@ async def register_user(
         status_code=200,
     )
 
-@router.post("/organizations", response_model=Organization)
+@router.post("/organizations/")
 def create_organization(
     org_data: OrganizationCreate,
     db: Session = Depends(get_db),

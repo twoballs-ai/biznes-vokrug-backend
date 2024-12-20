@@ -23,6 +23,8 @@ from .database import get_db
 from .models import IndividualEntrepreneur, User, Organization
 from .schemas import (
     IndividualEntrepreneurCreate,
+    IndividualEntrepreneurResponse,
+    IndividualEntrepreneurUpdate,
     UserCreate,
     OrganizationCreate,
     OrganizationUpdate,
@@ -167,56 +169,94 @@ async def register_user(
         status_code=200,
     )
 
+from fastapi import HTTPException, status
+
 @router.post("/organizations/")
 def create_organization(
     org_data: OrganizationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Проверяем, существует ли организация с таким же ОГРН
+    existing_org = db.query(Organization).filter(Organization.ogrn == org_data.ogrn).first()
+    if existing_org:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Организация с таким ОГРН уже существует."
+        )
+    
     # Создаём новую организацию
     new_org = Organization(**org_data.model_dump(), owner_id=current_user.id)
     db.add(new_org)
     db.commit()
     db.refresh(new_org)
     return JSONResponse(
-            content={"status": False, "data": new_org.to_dict(), "message": "Пользователь уже существует"},
+        content={"status": True, "data": new_org.to_dict(), "message": "Успешно добавлена"},
+        status_code=status.HTTP_201_CREATED,
+    )
+
+@router.get("/organizations", response_model=list[dict])  # Указываем, что возвращаем список словарей
+def get_all_organizations(limit: int | None = None, db: Session = Depends(get_db)):
+    """
+    Получить список организаций с возможным ограничением по количеству.
+    
+    Args:
+        limit (int | None): Максимальное количество возвращаемых организаций. По умолчанию None (все организации).
+        db (Session): Сессия базы данных.
+    """
+    # Если `limit` задан, применяем ограничение
+    query = db.query(Organization)
+    if limit:
+        query = query.limit(limit)
+    
+    organizations = query.all()
+
+    # Если организаций нет, возвращаем пустой список
+    if not organizations:
+        return JSONResponse(
+            content={"status": True, "data": [], "message": "Организации не найдены"},
             status_code=200,
         )
 
+    # Преобразуем объекты в словари (предполагается, что у модели есть метод `to_dict()`)
+    orgs_list = [org.to_dict() for org in organizations]
 
-# @router.put("/organizations/{org_id}", response_model=Organization)
-# def update_organization(
-#     org_id: int,
-#     org_data: OrganizationUpdate,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     # Получаем организацию из базы данных
-#     org = db.query(Organization).filter(Organization.id == org_id, Organization.owner_id == current_user.id).first()
-#     if not org:
-#         raise HTTPException(status_code=404, detail="Организация не найдена")
+    return JSONResponse(
+        content={"status": True, "data": orgs_list, "message": "Успешно"},
+        status_code=200,
+    )
 
-#     # Обновляем данные организации
-#     for key, value in org_data.model_dump(exclude_unset=True).items():
-#         setattr(org, key, value)
 
-#     # Обновляем время обновления
-#     org.updated_at = datetime.utcnow()
+@router.get("/organizations/by_ogrn/{ogrn}")
+def get_organization_by_ogrn(
+    ogrn: str,
+    db: Session = Depends(get_db),
+):
+    
+    org = db.query(Organization).filter(Organization.ogrn == ogrn).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Организация не найдена")
+    return JSONResponse(
+        content={"status": True, "data": org.to_dict(), "message": "Успешно"},
+        status_code=200,
+    )
 
-#     db.commit()
-#     db.refresh(org)
-#     return org
 
-@router.get("/organizations/{id}", response_model=OrganizationResponse)
-def get_organization(
+
+@router.get("/organizations/{id}")
+def get_organization_by_id(
     id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ):
+    print("dd")
     org = db.query(Organization).filter(Organization.id == id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Организация не найдена")
-    return org
+    return JSONResponse(
+        content={"status": True, "data": org.to_dict(), "message": "Успешно"},
+        status_code=200,
+    )
+
 
 @router.put("/organizations/{id}", response_model=OrganizationResponse)
 def update_organization(
@@ -255,6 +295,115 @@ def delete_organization(
     db.delete(org)
     db.commit()
     return org
+
+
+@router.get("/individual-entrepreneurs", response_model=list[dict])  # Указываем, что возвращаем список словарей
+def get_all_individual_entrepreneurs(limit: int | None = None, db: Session = Depends(get_db)):
+    """
+    Получить список индивидуальных предпринимателей с возможным ограничением по количеству.
+    
+    Args:
+        limit (int | None): Максимальное количество возвращаемых предпринимателей. По умолчанию None (все).
+        db (Session): Сессия базы данных.
+    """
+    # Создаем запрос с возможным ограничением
+    query = db.query(IndividualEntrepreneur)
+    if limit:
+        query = query.limit(limit)
+    
+    entrepreneurs = query.all()
+
+    # Если предпринимателей нет, возвращаем пустой список
+    if not entrepreneurs:
+        return JSONResponse(
+            content={"status": True, "data": [], "message": "Предприниматели не найдены"},
+            status_code=200,
+        )
+
+    # Преобразуем объекты в словари
+    entrepreneurs_list = [entrepreneur.to_dict() for entrepreneur in entrepreneurs]
+
+    return JSONResponse(
+        content={"status": True, "data": entrepreneurs_list, "message": "Успешно"},
+        status_code=200,
+    )
+@router.post("/individual-entrepreneurs/")
+def create_individual_entrepreneur(
+    ie_data: IndividualEntrepreneurCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверяем, существует ли предприниматель с таким же ОГРНИП
+    existing_ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.ogrnip == ie_data.ogrnip).first()
+    if existing_ie:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Индивидуальный предприниматель с таким ОГРНИП уже существует."
+        )
+    
+    # Создаём нового индивидуального предпринимателя
+    new_ie = IndividualEntrepreneur(**ie_data.model_dump(), owner_id=current_user.id)
+    db.add(new_ie)
+    db.commit()
+    db.refresh(new_ie)
+    return JSONResponse(
+        content={"status": True, "data": new_ie.to_dict(), "message": "Успешно добавлен"},
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.get("/individual-entrepreneurs/{id}")
+def get_individual_entrepreneur_by_id(
+    id: int,
+    db: Session = Depends(get_db),
+):
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.id == id).first()
+    if not ie:
+        raise HTTPException(status_code=404, detail="Индивидуальный предприниматель не найден")
+    return JSONResponse(
+        content={"status": True, "data": ie.to_dict(), "message": "Успешно"},
+        status_code=200,
+    )
+
+
+@router.put("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
+def update_individual_entrepreneur(
+    id: int,
+    ie_data: IndividualEntrepreneurUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.id == id).first()
+    if not ie:
+        raise HTTPException(status_code=404, detail="Индивидуальный предприниматель не найден")
+    # Проверяем, является ли текущий пользователь владельцем
+    if ie.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Вы не авторизованы для обновления этого предпринимателя")
+
+    for key, value in ie_data.dict(exclude_unset=True).items():
+        setattr(ie, key, value)
+
+    db.commit()
+    db.refresh(ie)
+    return ie
+
+
+@router.delete("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
+def delete_individual_entrepreneur(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.id == id).first()
+    if not ie:
+        raise HTTPException(status_code=404, detail="Индивидуальный предприниматель не найден")
+    # Проверяем, является ли текущий пользователь владельцем
+    if ie.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Вы не авторизованы для удаления этого предпринимателя")
+    
+    db.delete(ie)
+    db.commit()
+    return ie
 
 @router.get("/suggest/address")
 async def suggest_address(

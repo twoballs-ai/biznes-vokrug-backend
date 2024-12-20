@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, EmailStr
 
 class UserCreate(BaseModel):
@@ -59,6 +59,28 @@ class OrganizationResponse(BaseModel):
     rating: Optional[float] = None
     logo_url: Optional[str] = None
     city: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
+class IndividualEntrepreneurUpdate(BaseModel):
+    inn: Optional[str] = None
+    inn: str
+    ogrnip: str
+    phone: Optional[str] = None
+    owner_id: int
+    services: Optional[List[dict]] = None  # Список услуг
+    products: Optional[List[dict]] = None  # Список товаров
+
+class IndividualEntrepreneurResponse(BaseModel):
+    id: int
+    inn: str
+    ogrnip: str
+    phone: Optional[str] = None
+    owner_id: int
+    services: Optional[List[dict]] = None  # Список услуг
+    products: Optional[List[dict]] = None  # Список товаров
 
     class Config:
         orm_mode = True

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Response, Body
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from biznes_vokrug_backend.auth import (
     create_access_token,
@@ -243,7 +243,7 @@ def get_organization_by_ogrn(
 
 
 
-@router.get("/organizations/{id}")
+@router.get("/organization/{id}")
 def get_organization_by_id(
     id: int,
     db: Session = Depends(get_db),
@@ -294,7 +294,27 @@ def delete_organization(
     
     db.delete(org)
     db.commit()
-    return org
+    return JSONResponse(
+        content={"status": True, "message": "Успешно удалено"},
+        status_code=200,
+    )
+
+@router.get("/organizations/me")
+def get_organizations_for_current_user(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    organizations = db.query(Organization).filter(Organization.owner_id == current_user.id).all()
+    if not organizations:
+        raise HTTPException(status_code=404, detail="Организации не найдены")
+    return JSONResponse(
+        content={
+            "status": True,
+            "data": [org.to_dict() for org in organizations],
+            "message": "Успешно"
+        },
+        status_code=200,
+    )
 
 
 @router.get("/individual-entrepreneurs", response_model=list[dict])  # Указываем, что возвращаем список словарей
@@ -364,7 +384,38 @@ def get_individual_entrepreneur_by_id(
         content={"status": True, "data": ie.to_dict(), "message": "Успешно"},
         status_code=200,
     )
-
+@router.get("/individual-entrepreneurs/me")
+def get_individual_entrepreneurs_for_user(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).all()
+    if not ie:
+        raise HTTPException(status_code=404, detail="Индивидуальные предприниматели не найдены")
+    return JSONResponse(
+        content={
+            "status": True,
+            "data": [entrepreneur.to_dict() for entrepreneur in ie],
+            "message": "Успешно"
+        },
+        status_code=200,
+    )
+@router.get("/individual-entrepreneurs/me")
+def get_individual_entrepreneurs_for_user(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).all()
+    if not ie:
+        raise HTTPException(status_code=404, detail="Индивидуальные предприниматели не найдены")
+    return JSONResponse(
+        content={
+            "status": True,
+            "data": [entrepreneur.to_dict() for entrepreneur in ie],
+            "message": "Успешно"
+        },
+        status_code=200,
+    )
 
 @router.put("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
 def update_individual_entrepreneur(
@@ -419,3 +470,60 @@ async def suggest_address(
         raise HTTPException(status_code=404, detail="Предложения не найдены")
 
     return {"suggestions": suggestions}
+
+
+
+
+@router.get("/user/details")
+def get_user_details(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Загружаем связанные данные пользователя
+    user = (
+        db.query(User)
+        .filter(User.id == current_user.id)
+        .options(
+            joinedload(User.organizations).joinedload(Organization.services),
+            joinedload(User.organizations).joinedload(Organization.products),
+            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.services),
+            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.products),
+        )
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Формируем результат
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "organizations": [
+            {
+                "id": org.id,
+                "name": org.name,
+                "description": org.description,
+                "services": [
+                    {"id": svc.id, "name": svc.name, "price": svc.price} for svc in org.services
+                ],
+                "products": [
+                    {"id": prod.id, "name": prod.name, "price": prod.price} for prod in org.products
+                ],
+            }
+            for org in user.organizations
+        ],
+        "individual_entrepreneur": {
+            "id": user.individual_entrepreneur.id,
+            "inn": user.individual_entrepreneur.inn,
+            "ogrnip": user.individual_entrepreneur.ogrnip,
+            "services": [
+                {"id": svc.id, "name": svc.name, "price": svc.price} for svc in user.individual_entrepreneur.services
+            ],
+            "products": [
+                {"id": prod.id, "name": prod.name, "price": prod.price} for prod in user.individual_entrepreneur.products
+            ],
+        } if user.individual_entrepreneur else None,
+    }

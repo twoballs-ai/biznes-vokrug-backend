@@ -20,11 +20,13 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from .database import get_db
-from .models import IndividualEntrepreneur, User, Organization
+from .models import IndividualEntrepreneur, Product, Service, User, Organization
 from .schemas import (
     IndividualEntrepreneurCreate,
     IndividualEntrepreneurResponse,
     IndividualEntrepreneurUpdate,
+    ProductCreate,
+    ServiceCreate,
     UserCreate,
     OrganizationCreate,
     OrganizationUpdate,
@@ -306,7 +308,15 @@ def get_organizations_for_current_user(
 ):
     organizations = db.query(Organization).filter(Organization.owner_id == current_user.id).all()
     if not organizations:
-        raise HTTPException(status_code=404, detail="Организации не найдены")
+        return JSONResponse(
+            content={
+                "status": False,
+                "data": [],  # Возвращаем пустой массив
+                "message": "Организации не найдены"
+            },
+            status_code=200,
+        )
+
     return JSONResponse(
         content={
             "status": True,
@@ -347,28 +357,48 @@ def get_all_individual_entrepreneurs(limit: int | None = None, db: Session = Dep
         content={"status": True, "data": entrepreneurs_list, "message": "Успешно"},
         status_code=200,
     )
+
 @router.post("/individual-entrepreneurs/")
 def create_individual_entrepreneur(
     ie_data: IndividualEntrepreneurCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверяем, существует ли предприниматель с таким же ОГРНИП
-    existing_ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.ogrnip == ie_data.ogrnip).first()
-    if existing_ie:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Индивидуальный предприниматель с таким ОГРНИП уже существует."
+    # Проверяем, существует ли ИП у текущего пользователя
+    existing_ie_for_user = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).first()
+    if existing_ie_for_user:
+        return JSONResponse(
+            content={
+                "status": False,
+                "message": "Вы уже зарегистрировали индивидуального предпринимателя."
+            },
+            status_code=400,
         )
-    
+
+    # Проверяем, существует ли предприниматель с таким же ОГРНИП
+    existing_ie_by_ogrnip = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.ogrnip == ie_data.ogrnip).first()
+    if existing_ie_by_ogrnip:
+        return JSONResponse(
+            content={
+                "status": False,
+                "message": "Индивидуальный предприниматель с таким ОГРНИП уже существует."
+            },
+            status_code=400,
+        )
+
     # Создаём нового индивидуального предпринимателя
     new_ie = IndividualEntrepreneur(**ie_data.model_dump(), owner_id=current_user.id)
     db.add(new_ie)
     db.commit()
     db.refresh(new_ie)
+
     return JSONResponse(
-        content={"status": True, "data": new_ie.to_dict(), "message": "Успешно добавлен"},
-        status_code=status.HTTP_201_CREATED,
+        content={
+            "status": True,
+            "data": new_ie.to_dict(),
+            "message": "Индивидуальный предприниматель успешно добавлен."
+        },
+        status_code=201,
     )
 
 
@@ -384,14 +414,21 @@ def get_individual_entrepreneur_by_id(
         content={"status": True, "data": ie.to_dict(), "message": "Успешно"},
         status_code=200,
     )
-@router.get("/individual-entrepreneurs/me")
+@router.get("/individual-entrepreneur/me")
 def get_individual_entrepreneurs_for_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).all()
     if not ie:
-        raise HTTPException(status_code=404, detail="Индивидуальные предприниматели не найдены")
+        return JSONResponse(
+            content={
+                "status": False,
+                "data": [],  # Возвращаем пустой массив
+                "message": "ип не найдены"
+            },
+            status_code=200,
+        )
     return JSONResponse(
         content={
             "status": True,
@@ -400,22 +437,7 @@ def get_individual_entrepreneurs_for_user(
         },
         status_code=200,
     )
-@router.get("/individual-entrepreneurs/me")
-def get_individual_entrepreneurs_for_user(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).all()
-    if not ie:
-        raise HTTPException(status_code=404, detail="Индивидуальные предприниматели не найдены")
-    return JSONResponse(
-        content={
-            "status": True,
-            "data": [entrepreneur.to_dict() for entrepreneur in ie],
-            "message": "Успешно"
-        },
-        status_code=200,
-    )
+
 
 @router.put("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
 def update_individual_entrepreneur(
@@ -527,3 +549,173 @@ def get_user_details(
             ],
         } if user.individual_entrepreneur else None,
     }
+@router.post("/services/")
+def create_service(
+    service_data: ServiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Проверяем, принадлежит ли организация пользователю
+    if service_data.organization_id:
+        organization = db.query(Organization).filter(
+            Organization.id == service_data.organization_id,
+            Organization.owner_id == current_user.id,
+        ).first()
+        if not organization:
+            return JSONResponse(
+                content={"status": False, "message": "Организация не найдена или не принадлежит текущему пользователю"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    # Проверяем, принадлежит ли индивидуальный предприниматель пользователю
+    if service_data.individual_entrepreneur_id:
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == service_data.individual_entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id,
+        ).first()
+        if not entrepreneur:
+            return JSONResponse(
+                content={"status": False, "message": "ИП не найден или не принадлежит текущему пользователю"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    # Создаем услугу
+    new_service = Service(**service_data.dict())
+    db.add(new_service)
+    db.commit()
+    db.refresh(new_service)
+
+    return JSONResponse(
+        content={"status": True, "data": new_service.to_dict(), "message": "Услуга успешно создана"},
+        status_code=status.HTTP_201_CREATED,
+    )
+
+@router.delete("/services/{id}")
+def delete_service(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = db.query(Service).filter(Service.id == id).first()
+    if not service:
+        return JSONResponse(
+            content={"status": False, "message": "Услуга не найдена"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Проверяем, имеет ли пользователь право удалить услугу
+    if service.organization_id:
+        organization = db.query(Organization).filter(
+            Organization.id == service.organization_id,
+            Organization.owner_id == current_user.id,
+        ).first()
+        if not organization:
+            return JSONResponse(
+                content={"status": False, "message": "Услуга не принадлежит вашей организации"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    if service.individual_entrepreneur_id:
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == service.individual_entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id,
+        ).first()
+        if not entrepreneur:
+            return JSONResponse(
+                content={"status": False, "message": "Услуга не принадлежит вашему ИП"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    db.delete(service)
+    db.commit()
+
+    return JSONResponse(
+        content={"status": True, "message": "Услуга успешно удалена"},
+        status_code=status.HTTP_200_OK,
+    )
+
+# --- Product CRUD Operations ---
+@router.post("/products/")
+def create_product(
+    product_data: ProductCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Проверяем, принадлежит ли организация пользователю
+    if product_data.organization_id:
+        organization = db.query(Organization).filter(
+            Organization.id == product_data.organization_id,
+            Organization.owner_id == current_user.id,
+        ).first()
+        if not organization:
+            return JSONResponse(
+                content={"status": False, "message": "Организация не найдена или не принадлежит текущему пользователю"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    # Проверяем, принадлежит ли индивидуальный предприниматель пользователю
+    if product_data.individual_entrepreneur_id:
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == product_data.individual_entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id,
+        ).first()
+        if not entrepreneur:
+            return JSONResponse(
+                content={"status": False, "message": "ИП не найден или не принадлежит текущему пользователю"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    # Создаем продукт
+    new_product = Product(**product_data.dict())
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+
+    return JSONResponse(
+        content={"status": True, "data": new_product.to_dict(), "message": "Продукт успешно создан"},
+        status_code=status.HTTP_201_CREATED,
+    )
+
+@router.delete("/products/{id}")
+def delete_product(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    product = db.query(Product).filter(Product.id == id).first()
+    if not product:
+        return JSONResponse(
+            content={"status": False, "message": "Продукт не найден"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Проверяем, имеет ли пользователь право удалить продукт
+    if product.organization_id:
+        organization = db.query(Organization).filter(
+            Organization.id == product.organization_id,
+            Organization.owner_id == current_user.id,
+        ).first()
+        if not organization:
+            return JSONResponse(
+                content={"status": False, "message": "Продукт не принадлежит вашей организации"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    if product.individual_entrepreneur_id:
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == product.individual_entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id,
+        ).first()
+        if not entrepreneur:
+            return JSONResponse(
+                content={"status": False, "message": "Продукт не принадлежит вашему ИП"},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+    db.delete(product)
+    db.commit()
+
+    return JSONResponse(
+        content={"status": True, "message": "Продукт успешно удален"},
+        status_code=status.HTTP_200_OK,
+    )

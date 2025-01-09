@@ -137,7 +137,12 @@ class Service(Base):
     organization: Mapped[Optional["Organization"]] = relationship(back_populates="services")
     individual_entrepreneur: Mapped[Optional["IndividualEntrepreneur"]] = relationship(back_populates="services")
 
-# Product model for Organization and IndividualEntrepreneur
+    # Новое поле: категория услуги
+    category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("service_categories.id"))
+    category: Mapped[Optional["ServiceCategory"]] = relationship(back_populates="services")
+
+
+# Обновление модели Product
 class Product(Base):
     __tablename__ = "products_models"
 
@@ -154,3 +159,46 @@ class Product(Base):
     organization: Mapped[Optional["Organization"]] = relationship(back_populates="products")
     individual_entrepreneur: Mapped[Optional["IndividualEntrepreneur"]] = relationship(back_populates="products")
 
+    # Новое поле: категория продукта
+    category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("product_categories.id"))
+    category: Mapped[Optional["ProductCategory"]] = relationship(back_populates="products")
+
+class ServiceCategory(Base):
+    __tablename__ = "service_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # Связь с услугами
+    services: Mapped[List["Service"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+        }
+
+
+# Модель для категорий продуктов
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # Связь с продуктами
+    products: Mapped[List["Product"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+        }

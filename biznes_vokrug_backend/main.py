@@ -6,7 +6,8 @@ from fastapi.responses import RedirectResponse, FileResponse
 
 from biznes_vokrug_backend.auth import get_current_user
 
-from .routers import router
+from .routers.routers import router
+from .routers.category_product import category_product
 from .auth import oauth2_scheme
 app = FastAPI(
     title="Your API",
@@ -30,7 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix="/api", tags=["User management"])
+app.include_router(router, prefix="/api", tags=["базовые роуты"])
+app.include_router(category_product, prefix="/api/category-products", tags=["категории и продукты"])
 # app.include_router(router, prefix="/api", tags=["User management"], dependencies=[Depends(oauth2_scheme)])
 
 if __name__ == "__main__":

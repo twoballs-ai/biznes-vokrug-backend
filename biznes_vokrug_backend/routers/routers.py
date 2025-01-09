@@ -19,9 +19,9 @@ import os
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from .database import get_db
-from .models import IndividualEntrepreneur, Product, Service, User, Organization
-from .schemas import (
+from ..database import get_db
+from ..models import IndividualEntrepreneur, Product, Service, User, Organization
+from ..schemas import (
     IndividualEntrepreneurCreate,
     IndividualEntrepreneurResponse,
     IndividualEntrepreneurUpdate,
@@ -30,7 +30,8 @@ from .schemas import (
     UserCreate,
     OrganizationCreate,
     OrganizationUpdate,
-    OrganizationResponse
+    OrganizationResponse,
+    UserUpdate
 )
 from passlib.context import CryptContext
 
@@ -172,6 +173,125 @@ async def register_user(
     )
 
 from fastapi import HTTPException, status
+@router.get("/user/details")
+def get_user_details(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Загружаем связанные данные пользователя
+    user = (
+        db.query(User)
+        .filter(User.id == current_user.id)
+        .options(
+            joinedload(User.organizations).joinedload(Organization.services),
+            joinedload(User.organizations).joinedload(Organization.products),
+            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.services),
+            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.products),
+        )
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Формируем результат
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "organizations": [
+            {
+                "id": org.id,
+                "name": org.name,
+                "description": org.description,
+                "services": [
+                    {"id": svc.id, "name": svc.name, "price": svc.price} for svc in org.services
+                ],
+                "products": [
+                    {"id": prod.id, "name": prod.name, "price": prod.price} for prod in org.products
+                ],
+            }
+            for org in user.organizations
+        ],
+        "individual_entrepreneur": {
+            "id": user.individual_entrepreneur.id,
+            "inn": user.individual_entrepreneur.inn,
+            "ogrnip": user.individual_entrepreneur.ogrnip,
+            "services": [
+                {"id": svc.id, "name": svc.name, "price": svc.price} for svc in user.individual_entrepreneur.services
+            ],
+            "products": [
+                {"id": prod.id, "name": prod.name, "price": prod.price} for prod in user.individual_entrepreneur.products
+            ],
+        } if user.individual_entrepreneur else None,
+    }
+
+@router.put("/user/update")
+def update_user_info(
+    user_data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Ищем пользователя по текущему токену/сессии
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # 2. Обновляем только разрешённые поля
+    # Проверяем, что пришли не None; если поле None, не меняем его
+    if user_data.name is not None:
+        user.name = user_data.name
+    if user_data.email is not None:
+        # При необходимости можно проверить, что такой email ещё не занят
+        # или провести другую валидацию
+        user.email = user_data.email
+    if user_data.phone is not None:
+        user.phone = user_data.phone
+
+    # 3. Сохраняем изменения
+    db.commit()
+    db.refresh(user)
+
+    # 4. Возвращаем обновлённого пользователя (можно в формате user.to_dict())
+    return JSONResponse(
+        content={"status": True, "data": user.to_dict(), "message": "Пользователь успешно обновлен"},
+        status_code=200,
+    )
+
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        # Или просто: return user.to_dict()
+    }
+# class UserChangePassword(BaseModel):
+#     old_password: str
+#     new_password: str
+
+# @router.post("/user/change-password")
+# def change_user_password(
+#     password_data: UserChangePassword,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     user = db.query(User).filter(User.id == current_user.id).first()
+#     if not user:
+#         raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+#     # Проверяем старый пароль (если хранится в hash)
+#     if not verify_password(password_data.old_password, user.hashed_password):
+#         raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+
+#     # Генерируем новый хэш
+#     new_hashed_password = get_password_hash(password_data.new_password)
+#     user.hashed_password = new_hashed_password
+
+#     db.commit()
+#     db.refresh(user)
+
+#     return {"detail": "Пароль успешно изменён"}
 
 @router.post("/organizations/")
 def create_organization(
@@ -496,59 +616,7 @@ async def suggest_address(
 
 
 
-@router.get("/user/details")
-def get_user_details(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Загружаем связанные данные пользователя
-    user = (
-        db.query(User)
-        .filter(User.id == current_user.id)
-        .options(
-            joinedload(User.organizations).joinedload(Organization.services),
-            joinedload(User.organizations).joinedload(Organization.products),
-            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.services),
-            joinedload(User.individual_entrepreneur).joinedload(IndividualEntrepreneur.products),
-        )
-        .first()
-    )
 
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-    # Формируем результат
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "phone": user.phone,
-        "organizations": [
-            {
-                "id": org.id,
-                "name": org.name,
-                "description": org.description,
-                "services": [
-                    {"id": svc.id, "name": svc.name, "price": svc.price} for svc in org.services
-                ],
-                "products": [
-                    {"id": prod.id, "name": prod.name, "price": prod.price} for prod in org.products
-                ],
-            }
-            for org in user.organizations
-        ],
-        "individual_entrepreneur": {
-            "id": user.individual_entrepreneur.id,
-            "inn": user.individual_entrepreneur.inn,
-            "ogrnip": user.individual_entrepreneur.ogrnip,
-            "services": [
-                {"id": svc.id, "name": svc.name, "price": svc.price} for svc in user.individual_entrepreneur.services
-            ],
-            "products": [
-                {"id": prod.id, "name": prod.name, "price": prod.price} for prod in user.individual_entrepreneur.products
-            ],
-        } if user.individual_entrepreneur else None,
-    }
 @router.post("/services/")
 def create_service(
     service_data: ServiceCreate,

@@ -7,7 +7,11 @@ class UserCreate(BaseModel):
     phone: Optional[str]  # Необязательное
     password: str  # Обязательное
 
-
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    
 class IndividualEntrepreneurCreate(BaseModel):
     inn: str = Field(..., min_length=10, max_length=12, description="ИНН должен содержать 10 или 12 цифр")
     ogrnip: str = Field(..., min_length=15, max_length=15, description="ОГРНИП должен содержать 15 цифр")

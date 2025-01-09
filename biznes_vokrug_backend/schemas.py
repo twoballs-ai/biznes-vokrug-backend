@@ -27,7 +27,6 @@ class OrganizationCreate(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     email: Optional[str] = None
-    category: Optional[str] = None
     is_verified: bool = False
     rating: Optional[float] = None
     logo_url: Optional[str] = None
@@ -42,7 +41,6 @@ class OrganizationUpdate(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     email: Optional[EmailStr] = None
-    category: Optional[str] = None
     is_verified: Optional[bool] = None
     rating: Optional[float] = None
     logo_url: Optional[str] = None
@@ -58,7 +56,6 @@ class OrganizationResponse(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     email: Optional[EmailStr] = None
-    category: Optional[str] = None
     is_verified: bool
     rating: Optional[float] = None
     logo_url: Optional[str] = None

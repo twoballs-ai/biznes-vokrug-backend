@@ -43,7 +43,6 @@ class Organization(Base):
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)

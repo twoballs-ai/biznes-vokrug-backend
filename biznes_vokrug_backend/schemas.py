@@ -14,6 +14,7 @@ class UserUpdate(BaseModel):
     
 class IndividualEntrepreneurCreate(BaseModel):
     inn: str = Field(..., min_length=10, max_length=12, description="ИНН должен содержать 10 или 12 цифр")
+    name: Optional[str] = None
     ogrnip: str = Field(..., min_length=15, max_length=15, description="ОГРНИП должен содержать 15 цифр")
     phone: Optional[str] = None
 
@@ -40,7 +41,7 @@ class OrganizationUpdate(BaseModel):
     ogrn: Optional[str] = None
     phone: Optional[str] = None
     website: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     is_verified: Optional[bool] = None
     rating: Optional[float] = None
     logo_url: Optional[str] = None
@@ -55,7 +56,7 @@ class OrganizationResponse(BaseModel):
     ogrn: Optional[str] = None
     phone: Optional[str] = None
     website: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     is_verified: bool
     rating: Optional[float] = None
     logo_url: Optional[str] = None
@@ -66,22 +67,19 @@ class OrganizationResponse(BaseModel):
 
 
 class IndividualEntrepreneurUpdate(BaseModel):
+    name: Optional[str] = None
     inn: Optional[str] = None
-    inn: str
-    ogrnip: str
+    ogrnip: Optional[str] = None
     phone: Optional[str] = None
-    owner_id: int
-    services: Optional[List[dict]] = None  # Список услуг
-    products: Optional[List[dict]] = None  # Список товаров
+    address: Optional[str] = None
 
 class IndividualEntrepreneurResponse(BaseModel):
+    name: Optional[str] = None
     id: int
     inn: str
     ogrnip: str
     phone: Optional[str] = None
     owner_id: int
-    services: Optional[List[dict]] = None  # Список услуг
-    products: Optional[List[dict]] = None  # Список товаров
 
     class Config:
         orm_mode = True

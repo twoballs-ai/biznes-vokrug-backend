@@ -259,13 +259,6 @@ def update_user_info(
         status_code=200,
     )
 
-    return {
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "phone": user.phone,
-        # Или просто: return user.to_dict()
-    }
 # class UserChangePassword(BaseModel):
 #     old_password: str
 #     new_password: str
@@ -535,50 +528,61 @@ def get_individual_entrepreneur_by_id(
         status_code=200,
     )
 @router.get("/individual-entrepreneur/me")
-def get_individual_entrepreneurs_for_user(
+def get_individual_entrepreneur_for_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).all()
-    if not ie:
+    # Получаем единственного ИП пользователя
+    entrepreneur = db.query(IndividualEntrepreneur).filter(
+        IndividualEntrepreneur.owner_id == current_user.id
+    ).first()
+
+    if not entrepreneur:
         return JSONResponse(
             content={
                 "status": False,
-                "data": [],  # Возвращаем пустой массив
-                "message": "ип не найдены"
+                "data": None,  # Возвращаем None, так как ИП может быть только один
+                "message": "ИП не найден"
             },
             status_code=200,
         )
+
     return JSONResponse(
         content={
             "status": True,
-            "data": [entrepreneur.to_dict() for entrepreneur in ie],
+            "data": entrepreneur.to_dict(),  # Возвращаем единственного ИП
             "message": "Успешно"
         },
         status_code=200,
     )
 
 
-@router.put("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
+@router.put("/individual-entrepreneurs")
 def update_individual_entrepreneur(
-    id: int,
     ie_data: IndividualEntrepreneurUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.id == id).first()
+    # Получаем ИП текущего пользователя
+    ie = db.query(IndividualEntrepreneur).filter(IndividualEntrepreneur.owner_id == current_user.id).first()
     if not ie:
         raise HTTPException(status_code=404, detail="Индивидуальный предприниматель не найден")
-    # Проверяем, является ли текущий пользователь владельцем
-    if ie.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Вы не авторизованы для обновления этого предпринимателя")
 
-    for key, value in ie_data.dict(exclude_unset=True).items():
+    # Обновляем поля, исключая `owner_id`, `services` и `products`
+    for key, value in ie_data.dict(exclude_unset=True, exclude={"owner_id", "services", "products"}).items():
         setattr(ie, key, value)
 
     db.commit()
     db.refresh(ie)
-    return ie
+    
+    return JSONResponse(
+        content={
+            "status": True,
+            "data": ie.to_dict(),
+            "message": "Индивидуальный предприниматель успешно обновлён"
+        },
+        status_code=200,
+    )
 
 
 @router.delete("/individual-entrepreneurs/{id}", response_model=IndividualEntrepreneurResponse)
@@ -709,7 +713,7 @@ def create_product(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Проверяем, принадлежит ли организация пользователю
+    # Проверяем права пользователя
     if product_data.organization_id:
         organization = db.query(Organization).filter(
             Organization.id == product_data.organization_id,
@@ -721,7 +725,6 @@ def create_product(
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-    # Проверяем, принадлежит ли индивидуальный предприниматель пользователю
     if product_data.individual_entrepreneur_id:
         entrepreneur = db.query(IndividualEntrepreneur).filter(
             IndividualEntrepreneur.id == product_data.individual_entrepreneur_id,
@@ -733,7 +736,7 @@ def create_product(
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-    # Создаем продукт
+    # Создание продукта
     new_product = Product(**product_data.dict())
     db.add(new_product)
     db.commit()

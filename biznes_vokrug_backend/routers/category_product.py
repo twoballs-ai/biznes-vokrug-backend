@@ -91,30 +91,205 @@ product_categories_data = [
     {"name": "Компьютеры и аксессуары", "description": "ПК, ноутбуки и комплектующие."},
 ]
 
-@category_product.post("/service-categories")
-def add_service_categories(db: Session = Depends(get_db)):
-    try:
-        for category in service_categories_data:
-            existing_category = db.query(ServiceCategory).filter(ServiceCategory.name == category["name"]).first()
-            if not existing_category:
-                db.add(ServiceCategory(**category))
-        db.commit()
-        return {"message": "Категории услуг успешно добавлены."}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка добавления категорий услуг: {e}")
+# @category_product.post("/service-categories")
+# def add_service_categories(db: Session = Depends(get_db)):
+#     try:
+#         for category in service_categories_data:
+#             existing_category = db.query(ServiceCategory).filter(ServiceCategory.name == category["name"]).first()
+#             if not existing_category:
+#                 db.add(ServiceCategory(**category))
+#         db.commit()
+#         return {"message": "Категории услуг успешно добавлены."}
+#     except Exception as e:
+#         db.rollback()
+#         raise HTTPException(status_code=500, detail=f"Ошибка добавления категорий услуг: {e}")
 
 
-# POST-запрос для добавления категорий продуктов
-@category_product.post("/product-categories")
-def add_product_categories(db: Session = Depends(get_db)):
+# # POST-запрос для добавления категорий продуктов
+# @category_product.post("/product-categories")
+# def add_product_categories(db: Session = Depends(get_db)):
+#     try:
+#         for category in product_categories_data:
+#             existing_category = db.query(ProductCategory).filter(ProductCategory.name == category["name"]).first()
+#             if not existing_category:
+#                 db.add(ProductCategory(**category))
+#         db.commit()
+#         return {"message": "Категории продуктов успешно добавлены."}
+#     except Exception as e:
+#         db.rollback()
+#         raise HTTPException(status_code=500, detail=f"Ошибка добавления категорий продуктов: {e}")
+    
+# GET-запрос для получения продуктов пользователя, разделенных по ИП и организации
+# GET-запрос для получения продуктов пользователя, разделенных по ИП и организации
+@category_product.get("/organization/products")
+def get_organization_products(
+    organization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
-        for category in product_categories_data:
-            existing_category = db.query(ProductCategory).filter(ProductCategory.name == category["name"]).first()
-            if not existing_category:
-                db.add(ProductCategory(**category))
-        db.commit()
-        return {"message": "Категории продуктов успешно добавлены."}
+        # Проверяем, принадлежит ли организация текущему пользователю
+        organization = db.query(Organization).filter(
+            Organization.id == organization_id,
+            Organization.owner_id == current_user.id
+        ).first()
+
+        if not organization:
+            raise HTTPException(status_code=403, detail="Организация не найдена или не принадлежит пользователю.")
+
+        # Получение продуктов
+        org_products = (
+            db.query(Product)
+            .filter(Product.organization_id == organization_id)
+            .options(joinedload(Product.category))
+            .all()
+        )
+
+        return [
+            {
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "price": product.price,
+                "category": product.category.name if product.category else None,
+                "created_at": product.created_at,
+                "updated_at": product.updated_at,
+            }
+            for product in org_products
+        ]
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ошибка добавления категорий продуктов: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения продуктов: {e}")
+    
+@category_product.get("/entrepreneur/products")
+def get_individual_entrepreneur_products(
+    entrepreneur_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Проверяем, принадлежит ли ИП текущему пользователю
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id
+        ).first()
+
+        if not entrepreneur:
+            raise HTTPException(status_code=403, detail="ИП не найден или не принадлежит пользователю.")
+
+        # Получение продуктов
+        ie_products = (
+            db.query(Product)
+            .filter(Product.individual_entrepreneur_id == entrepreneur_id)
+            .options(joinedload(Product.category))
+            .all()
+        )
+
+        return [
+            {
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "price": product.price,
+                "category": product.category.name if product.category else None,
+                "created_at": product.created_at,
+                "updated_at": product.updated_at,
+            }
+            for product in ie_products
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения продуктов: {e}")
+@category_product.get("/organization/services")
+def get_organization_services(
+    organization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Проверяем, принадлежит ли организация текущему пользователю
+        organization = db.query(Organization).filter(
+            Organization.id == organization_id,
+            Organization.owner_id == current_user.id
+        ).first()
+
+        if not organization:
+            raise HTTPException(status_code=403, detail="Организация не найдена или не принадлежит пользователю.")
+
+        # Получение услуг
+        org_services = (
+            db.query(Service)
+            .filter(Service.organization_id == organization_id)
+            .options(joinedload(Service.category))
+            .all()
+        )
+
+        return [
+            {
+                "id": service.id,
+                "name": service.name,
+                "description": service.description,
+                "price": service.price,
+                "category": service.category.name if service.category else None,
+                "created_at": service.created_at,
+                "updated_at": service.updated_at,
+            }
+            for service in org_services
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения услуг: {e}")
+
+@category_product.get("/entrepreneur/services")
+def get_individual_entrepreneur_services(
+    entrepreneur_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Проверяем, принадлежит ли ИП текущему пользователю
+        entrepreneur = db.query(IndividualEntrepreneur).filter(
+            IndividualEntrepreneur.id == entrepreneur_id,
+            IndividualEntrepreneur.owner_id == current_user.id
+        ).first()
+
+        if not entrepreneur:
+            raise HTTPException(status_code=403, detail="ИП не найден или не принадлежит пользователю.")
+
+        # Получение услуг
+        ie_services = (
+            db.query(Service)
+            .filter(Service.individual_entrepreneur_id == entrepreneur_id)
+            .options(joinedload(Service.category))
+            .all()
+        )
+
+        return [
+            {
+                "id": service.id,
+                "name": service.name,
+                "description": service.description,
+                "price": service.price,
+                "category": service.category.name if service.category else None,
+                "created_at": service.created_at,
+                "updated_at": service.updated_at,
+            }
+            for service in ie_services
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения услуг: {e}")
+
+@category_product.get("/service-categories-dropdown", response_model=list[dict])
+def get_service_categories_dropdown(db: Session = Depends(get_db)):
+    try:
+        categories = db.query(ServiceCategory).all()
+        return [category.to_key_value() for category in categories]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения категорий сервисов: {e}")
+
+
+# GET-запрос для получения категорий продуктов
+@category_product.get("/product-categories-dropdown", response_model=list[dict])
+def get_product_categories_dropdown(db: Session = Depends(get_db)):
+    try:
+        categories = db.query(ProductCategory).all()
+        return [category.to_key_value() for category in categories]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения категорий продуктов: {e}")

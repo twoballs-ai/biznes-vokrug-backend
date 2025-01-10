@@ -77,7 +77,6 @@ class Organization(Base):
             "phone": self.phone,
             "website": self.website,
             "email": self.email,
-            "category": self.category,
             "is_verified": self.is_verified,
             "rating": self.rating,
             "logo_url": self.logo_url,
@@ -89,11 +88,15 @@ class Organization(Base):
             "products": [product.to_dict() for product in self.products] if self.products else [],
         }
 
-
+    def to_key_value(self):
+        """Метод для получения id и name в формате key-value."""
+        return {"key": self.id, "value": self.name}
+    
 class IndividualEntrepreneur(Base):
     __tablename__ = "individual_entrepreneurs_models"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     inn: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     ogrnip: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -111,6 +114,7 @@ class IndividualEntrepreneur(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "name": self.name,
             "inn": self.inn,
             "ogrnip": self.ogrnip,
             "phone": self.phone,
@@ -118,6 +122,9 @@ class IndividualEntrepreneur(Base):
             "services": [service.to_dict() for service in self.services] if self.services else [],
             "products": [product.to_dict() for product in self.products] if self.products else [],
         }
+    def to_key_value(self):
+        """Метод для получения id и name в формате key-value."""
+        return {"key": self.id, "value": self.name if self.name else "Без имени"}
 
 # Service model for Organization and IndividualEntrepreneur
 class Service(Base):
@@ -161,6 +168,19 @@ class Product(Base):
     # Новое поле: категория продукта
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("product_categories.id"))
     category: Mapped[Optional["ProductCategory"]] = relationship(back_populates="products")
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "price": self.price,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "organization_id": self.organization_id,
+            "individual_entrepreneur_id": self.individual_entrepreneur_id,
+            "category_id": self.category_id,
+        }
 
 class ServiceCategory(Base):
     __tablename__ = "service_categories"
@@ -181,7 +201,10 @@ class ServiceCategory(Base):
             "description": self.description,
         }
 
-
+    def to_key_value(self):
+        """Метод для получения id и name в формате key-value."""
+        return {"key": self.id, "value": self.name}
+    
 # Модель для категорий продуктов
 class ProductCategory(Base):
     __tablename__ = "product_categories"
@@ -201,3 +224,7 @@ class ProductCategory(Base):
             "name": self.name,
             "description": self.description,
         }
+    
+    def to_key_value(self):
+        """Метод для получения id и name в формате key-value."""
+        return {"key": self.id, "value": self.name}
